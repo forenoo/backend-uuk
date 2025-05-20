@@ -1,13 +1,21 @@
 import express from "express";
 import { productController } from "../controllers/productController.js";
-import { createProductValidation } from "../validators/productValidation.js";
-
+import { checkAuthMiddleware } from "../middlewares/checkAuthMiddleware.js";
+import { uploadFileMiddleware } from "../middlewares/uploadFileMiddleware.js";
 const router = express.Router();
 
-router.post("/product", createProductValidation, productController.createProduct);
-router.get("/product", productController.getProduct);
-router.get("/product/:id", productController.getProductById);
-router.put("/product/:id", productController.updateProduct);
-router.delete("/product/:id", productController.deleteProduct);
+router.post(
+  "/",
+  [checkAuthMiddleware, uploadFileMiddleware],
+  productController.createProduct
+);
+router.get("/", productController.getAllProducts);
+router.get("/:id", productController.getProductById);
+router.put(
+  "/:id",
+  [checkAuthMiddleware, uploadFileMiddleware],
+  productController.updateProduct
+);
+router.delete("/:id", checkAuthMiddleware, productController.deleteProduct);
 
 export default router;

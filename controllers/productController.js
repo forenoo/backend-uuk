@@ -1,79 +1,100 @@
-import { validationResult } from "express-validator";
-import Product from "../models/product.js";
+import Joi from "joi";
+import Product from "../models/product.js"; // Fixed casing to match existing file
 
 export const productController = {
   createProduct: async (req, res) => {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
+    const validation = Joi.object({
+      name: Joi.string().required(),
+      price: Joi.number().required(),
+      stock: Joi.number().required(),
+      type: Joi.string().valid("food", "drink", "snack").required(),
+      image_url: Joi.string().required(),
+      category_id: Joi.string().required(),
+    });
+
+    const { error } = validation.validate(req.body);
+    if (error) {
       return res.status(400).json({
-        status: "error",
-        message: "Validasi gagal",
-        errors: errors.array().map((error) => {
-          return {
-            field: error.path,
-            message: error.msg,
-          };
-        }),
+        message: error.message,
       });
     }
 
-    const { name, price, stock } = req.body;
+    try {
+      const { name, price, stock, type, image_url, category_id } = req.body;
 
-    const product = await Product.create({ name, price, stock });
-    await product.save();
+      const newProduct = new Product({
+        name,
+        price,
+        stock,
+        type,
+        image_url,
+        category_id,
+      });
 
-    return res.status(201).json({
-      status: "success",
-      message: "Produk berhasil dibuat",
-      data: product,
-    });
+      const savedProduct = await newProduct.save();
+
+      return res.status(201).json({
+        message: "Product created successfully",
+        data: savedProduct,
+      });
+    } catch (error) {
+      return res.status(500).json({
+        message: "Error creating product",
+        error: error.message,
+      });
+    }
   },
 
-  getProduct: async (req, res) => {
-    const products = await Product.find();
+  getAllProducts: async (req, res) => {
+    const products = await Product.find().populate("category_id");
 
-    return res.status(200).json({
-      status: "success",
-      message: "Berhasil mengambil semua produk",
-      data: products,
+    res.status(200).json({
+      message: "Products fetched successfully",
+      data: products.map((product) => {
+        return {
+          id: product._id,
+          name: product.name,
+          price: product.price,
+          stock: product.stock,
+          type: product.type,
+          image_url: product.image_url,
+          category: product.category_id,
+        };
+      }),
     });
   },
 
   getProductById: async (req, res) => {
     const { id } = req.params;
-
-    const product = await Product.findById(id);
+    const product = await Product.findById(id).populate("category_id");
     if (!product) {
       return res.status(404).json({
-        status: "error",
-        message: "Produk tidak ditemukan",
+        message: "Product not found",
       });
     }
 
-    return res.status(200).json({
-      status: "success",
-      message: "Berhasil mengambil produk",
-      data: product,
+    res.status(200).json({
+      message: "Product fetched successfully",
+      data: {
+        id: product._id,
+        name: product.name,
+        price: product.price,
+        stock: product.stock,
+        type: product.type,
+        image_url: product.image_url,
+        category: product.category_id,
+      },
     });
   },
 
   updateProduct: async (req, res) => {
     const { id } = req.params;
-
-    if (!req.body) {
-      return res.status(400).json({
-        status: "error",
-        message: "Tidak ada data yang dikirim (name / price / stock)",
-      });
-    }
-
-    const { name, price, stock } = req.body;
+    const { name, price, stock, type, image_url, category_id } = req.body;
 
     const product = await Product.findById(id);
     if (!product) {
       return res.status(404).json({
-        status: "error",
-        message: "Produk tidak ditemukan",
+        message: "Product not found",
       });
     }
 
@@ -86,32 +107,36 @@ export const productController = {
     if (stock) {
       product.stock = stock;
     }
-
+    if (type) {
+      product.type = type;
+    }
+    if (image_url) {
+      product.image_url = image_url;
+    }
+    if (category_id) {
+      product.category_id = category_id;
+    }
     await product.save();
 
-    return res.status(200).json({
-      status: "success",
-      message: "Produk berhasil diubah",
+    res.status(200).json({
+      message: "Product updated successfully",
       data: product,
     });
   },
 
   deleteProduct: async (req, res) => {
     const { id } = req.params;
-
-    const product = await Product.findById(id);
+    const product = await Product.findByIdAndDelete(id);
     if (!product) {
       return res.status(404).json({
-        status: "error",
-        message: "Produk tidak ditemukan",
+        message: "Product not found",
       });
     }
 
     await product.deleteOne();
 
-    return res.status(200).json({
-      status: "success",
-      message: "Produk berhasil dihapus",
+    res.status(200).json({
+      message: "Product deleted successfully",
     });
   },
 };

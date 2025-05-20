@@ -1,55 +1,58 @@
-import User from "../models/user.js";
-import bcrypt from "bcrypt";
-import { validationResult } from "express-validator";
+import Joi from "joi";
+import Customer from "../models/customer.js";
 import { generateToken } from "../utils/jwt.js";
+import bcrypt from "bcrypt";
 
 export const authController = {
   register: async (req, res) => {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({
-        status: "error",
-        message: "Validasi gagal",
-        errors: errors.array().map((error) => {
-          return {
-            field: error.path,
-            message: error.msg,
-          };
-        }),
-      });
-    }
-
-    const { username, email, password, role } = req.body;
-
-    const existingUser = await User.findOne({ username: username });
-    const existingEmail = await User.findOne({ email: email });
-    if (existingUser || existingEmail) {
-      return res.status(400).json({
-        status: "error",
-        message: "Nama pengguna atau email sudah terdaftar",
-      });
-    }
-
-    const hashedPassword = await bcrypt.hash(password, 10);
-    const user = await User.create({
-      username,
-      email,
-      password: hashedPassword,
-      role,
+    const validation = Joi.object({
+      username: Joi.string().required(),
+      password: Joi.string().required(),
+      address: Joi.string().optional(),
+      phone_number: Joi.string().optional(),
     });
-    await user.save();
 
-    const token = generateToken(user);
+    const { error } = validation.validate(req.body);
+    if (error) {
+      return res.status(400).json({
+        message: error.message,
+      });
+    }
 
-    return res.status(201).json({
-      status: "success",
-      message: "Pengguna berhasil dibuat",
+    const { username, password, address, phone_number } = req.body;
+    const existingUser = await Customer.findOne({ username });
+    if (existingUser) {
+      return res.status(400).json({
+        message: "Username sudah ada",
+      });
+    }
+
+    const dataCustomer = {
+      username,
+      password,
+    };
+
+    if (address) {
+      dataCustomer.address = address;
+    }
+    if (phone_number) {
+      dataCustomer.phone_number = phone_number;
+    }
+
+    const newCustomer = await Customer.create(dataCustomer);
+    const token = generateToken(newCustomer);
+    const hashedPassword = await bcrypt.hash(password, 10);
+    newCustomer.password = hashedPassword;
+    await newCustomer.save();
+
+    res.status(201).json({
+      message: "Berhasil melakukan registrasi",
       data: {
         user: {
-          id: user._id,
-          username: user.username,
-          email: user.email,
-          role: user.role,
+          id: newCustomer._id,
+          username: newCustomer.username,
+          address: newCustomer.address,
+          phone_number: newCustomer.phone_number,
         },
         token,
       },
@@ -57,49 +60,40 @@ export const authController = {
   },
 
   login: async (req, res) => {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
+    const validation = Joi.object({
+      username: Joi.string().required(),
+      password: Joi.string().required(),
+    });
+
+    const { error } = validation.validate(req.body);
+    if (error) {
       return res.status(400).json({
-        status: "error",
-        message: "Validasi gagal",
-        errors: errors.array().map((error) => {
-          return {
-            field: error.path,
-            message: error.msg,
-          };
-        }),
+        message: error.message,
       });
     }
 
-    const { email, password } = req.body;
-    const user = await User.findOne({ email: email });
-
-    if (!user) {
+    const { username, password } = req.body;
+    const existingUser = await Customer.findOne({ username });
+    const isPasswordValid = await bcrypt.compare(
+      password,
+      existingUser.password
+    );
+    if (!existingUser || !isPasswordValid) {
       return res.status(400).json({
-        status: "error",
-        message: "Email atau password tidak valid",
+        message: "Username atau password salah",
       });
     }
 
-    const isPasswordValid = await bcrypt.compare(password, user.password);
-    if (!isPasswordValid) {
-      return res.status(400).json({
-        status: "error",
-        message: "Email atau password tidak valid",
-      });
-    }
+    const token = generateToken(existingUser);
 
-    const token = generateToken(user);
-
-    return res.status(200).json({
-      status: "success",
-      message: "Login berhasil",
+    res.status(200).json({
+      message: "Berhasil melakukan login",
       data: {
         user: {
-          id: user._id,
-          username: user.username,
-          email: user.email,
-          role: user.role,
+          id: existingUser._id,
+          username: existingUser.username,
+          address: existingUser.address,
+          phone_number: existingUser.phone_number,
         },
         token,
       },
@@ -107,9 +101,8 @@ export const authController = {
   },
 
   logout: async (req, res) => {
-    return res.status(200).json({
-      status: "success",
-      message: "Logout berhasil",
+    res.status(200).json({
+      message: "Berhasil melakukan logout",
     });
   },
 };

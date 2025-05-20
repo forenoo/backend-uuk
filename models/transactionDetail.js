@@ -1,23 +1,29 @@
 import mongoose from "mongoose";
 
-const transactionDetailSchema = new mongoose.Schema({
-  transaction_id: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: "transaction",
-    required: true,
+const transactionDetailSchema = new mongoose.Schema(
+  {
+    transaction_id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "transaction",
+      required: true,
+    },
+    product_id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "product",
+      required: true,
+    },
+    quantity: {
+      type: Number,
+    },
+    subtotal: {
+      type: Number,
+    },
   },
-  product_id: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: "product",
-    required: true,
-  },
-  quantity: {
-    type: Number,
-  },
-  subtotal: {
-    type: Number,
-  },
-});
+  {
+    timestamps: true,
+    versionKey: false,
+  }
+);
 
 const TransactionDetail = mongoose.model(
   "transaction_detail",

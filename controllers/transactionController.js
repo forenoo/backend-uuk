@@ -1,110 +1,159 @@
 import Transaction from "../models/transaction.js";
 import TransactionDetail from "../models/transactionDetail.js";
-import Customer from "../models/customer.js";
-import Product from "../models/product.js";
+import mongoose from "mongoose";
 
 export const transactionController = {
   createTransaction: async (req, res) => {
-    const { customer_name, address, phone_number, products } = req.body;
+    try {
+      const { customer_id, total_price, products } = req.body;
 
-    let customer = await Customer.findOne({ name: customer_name });
-    if (!customer) {
-      customer = await Customer.create({
-        name: customer_name,
-        address: address || "",
-        phone_number: phone_number || "",
-      });
-    }
-
-    let total_amount = 0;
-    for (const item of products) {
-      const product = await Product.findById(item.product_id);
-      if (!product) {
-        return res.status(404).json({
-          status: "error",
-          message: `Produk dengan ID ${item.product_id} tidak ditemukan`,
-        });
-      }
-
-      if (product.stock < item.quantity) {
-        return res.status(400).json({
-          status: "error",
-          message: `Stok produk ${product.name} tidak cukup`,
-        });
-      }
-
-      total_amount += product.price * item.quantity;
-    }
-
-    const transaction = await Transaction.create({
-      customer_id: customer._id,
-      total_amount: total_amount,
-      transaction_date: new Date(),
-    });
-    await transaction.save();
-
-    const transactionId = transaction._id;
-
-    const transactionDetails = [];
-    for (const item of products) {
-      const product = await Product.findById(item.product_id);
-      const subtotal = product.price * item.quantity;
-
-      const detail = await TransactionDetail.create({
-        transaction_id: transactionId,
-        product_id: item.product_id,
-        quantity: item.quantity,
-        subtotal: subtotal,
+      const transaction = await Transaction.create({
+        customer_id,
+        total_price,
       });
 
-      transactionDetails.push(detail);
+      if (Array.isArray(products) && products.length > 0) {
+        const transactionDetails = products.map((product) => ({
+          transaction_id: transaction._id,
+          product_id: product.product_id,
+          quantity: product.quantity,
+          subtotal: product.subtotal,
+        }));
 
-      product.stock -= item.quantity;
-      await product.save();
+        await TransactionDetail.insertMany(transactionDetails);
+      }
+
+      res.status(201).json({
+        success: true,
+        data: transaction,
+        message: "Berhasil membuat transaksi",
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message: "Gagal membuat transaksi",
+        error: error.message,
+      });
     }
-
-    return res.status(201).json({
-      status: "success",
-      message: "Transaksi berhasil dibuat",
-      data: {
-        transaction: transaction,
-        details: transactionDetails,
-      },
-    });
   },
 
-  getTransactions: async (req, res) => {
-    const transactions = await Transaction.find().populate("customer_id");
+  getAllTransaction: async (req, res) => {
+    try {
+      const transactions = await Transaction.aggregate([
+        {
+          $lookup: {
+            from: "customers",
+            localField: "customer_id",
+            foreignField: "_id",
+            as: "customer",
+          },
+        },
+        {
+          $unwind: {
+            path: "$customer",
+            preserveNullAndEmptyArrays: true,
+          },
+        },
+        {
+          $unset: ["customer_id"],
+        },
+        {
+          $lookup: {
+            from: "transaction_details",
+            localField: "_id",
+            foreignField: "transaction_id",
+            as: "details",
+          },
+        },
+        {
+          $addFields: {
+            total_items: {
+              $sum: "$details.quantity",
+            },
+          },
+        },
+        {
+          $unset: ["details"],
+        },
+      ]);
 
-    return res.status(200).json({
-      status: "success",
-      message: "Transaksi berhasil diambil",
-      data: transactions,
-    });
+      res.status(200).json({
+        success: true,
+        message: "Berhasil mengambil semua transaksi",
+        data: transactions,
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message: "Gagal mengambil transaksi",
+        error: error.message,
+      });
+    }
   },
 
   getTransactionById: async (req, res) => {
     const { id } = req.params;
+    try {
+      const [transaction] = await Transaction.aggregate([
+        {
+          $match: { _id: new mongoose.Types.ObjectId(id) },
+        },
+        {
+          $lookup: {
+            from: "customers",
+            localField: "customer_id",
+            foreignField: "_id",
+            as: "customer",
+          },
+        },
+        {
+          $unwind: {
+            path: "$customer",
+            preserveNullAndEmptyArrays: true,
+          },
+        },
+        {
+          $unset: ["customer_id"],
+        },
+        {
+          $lookup: {
+            from: "transaction_details",
+            localField: "_id",
+            foreignField: "transaction_id",
+            as: "details",
+          },
+        },
+        {
+          $addFields: {
+            total_items: {
+              $sum: "$details.quantity",
+            },
+          },
+        },
+      ]);
 
-    const transaction = await Transaction.findById(id).populate("customer_id");
-    if (!transaction) {
-      return res.status(404).json({
-        status: "error",
-        message: "Transaksi tidak ditemukan",
+      if (!transaction) {
+        return res.status(404).json({
+          success: false,
+          message: "Transaksi tidak ditemukan",
+        });
+      }
+
+      res.status(200).json({
+        success: true,
+        message: "Berhasil mengambil transaksi",
+        data: transaction,
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message: "Gagal mengambil transaksi",
+        error: error.message,
       });
     }
-
-    const details = await TransactionDetail.find({
-      transaction_id: id,
-    }).populate("product_id");
-
-    const transactionData = transaction.toObject();
-    transactionData.details = details;
-
-    return res.status(200).json({
-      status: "success",
-      message: "Transaksi berhasil diambil",
-      data: transactionData,
-    });
   },
+
+  updateTransaction: async (req, res) => {},
+
+  deleteTransaction: async (req, res) => {},
 };
