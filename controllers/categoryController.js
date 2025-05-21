@@ -1,19 +1,14 @@
-import Joi from "joi";
 import Category from "../models/category.js";
 import Product from "../models/product.js";
+import { validationResult } from "express-validator";
 
 export const categoryController = {
   createCategory: async (req, res) => {
-    const validation = Joi.object({
-      icon: Joi.string().required(),
-      name: Joi.string().required(),
-      status: Joi.string().valid("active", "inactive").required(),
-    });
-
-    const { error } = validation.validate(req.body);
-    if (error) {
+    const validation = validationResult(req);
+    if (!validation.isEmpty()) {
       return res.status(400).json({
-        message: error.message,
+        message: "Validation error",
+        errors: validation.array(),
       });
     }
 
@@ -33,7 +28,14 @@ export const categoryController = {
   },
 
   getAllCategories: async (req, res) => {
-    const categories = await Category.find();
+    const { q } = req.query;
+
+    let query = {};
+    if (q) {
+      query = { name: { $regex: q, $options: "i" } };
+    }
+
+    const categories = await Category.find(query);
 
     const categoriesWithProductCount = await Promise.all(
       categories.map(async (category) => {

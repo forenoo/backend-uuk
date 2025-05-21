@@ -1,12 +1,21 @@
 import Transaction from "../models/transaction.js";
 import TransactionDetail from "../models/transactionDetail.js";
 import mongoose from "mongoose";
+import { validationResult } from "express-validator";
 
 export const transactionController = {
   createTransaction: async (req, res) => {
-    try {
-      const { customer_id, total_price, products } = req.body;
+    const validation = validationResult(req);
+    if (!validation.isEmpty()) {
+      return res.status(400).json({
+        message: "Validation error",
+        errors: validation.array(),
+      });
+    }
 
+    const { customer_id, total_price, products } = req.body;
+
+    try {
       const transaction = await Transaction.create({
         customer_id,
         total_price,
@@ -25,8 +34,8 @@ export const transactionController = {
 
       res.status(201).json({
         success: true,
-        data: transaction,
         message: "Berhasil membuat transaksi",
+        data: transaction,
       });
     } catch (error) {
       res.status(500).json({
@@ -39,6 +48,8 @@ export const transactionController = {
 
   getAllTransaction: async (req, res) => {
     try {
+      const { q } = req.query;
+
       const transactions = await Transaction.aggregate([
         {
           $lookup: {
@@ -53,6 +64,11 @@ export const transactionController = {
             path: "$customer",
             preserveNullAndEmptyArrays: true,
           },
+        },
+        {
+          $match: q
+            ? { "customer.username": { $regex: q, $options: "i" } }
+            : {},
         },
         {
           $unset: ["customer_id"],
@@ -124,11 +140,56 @@ export const transactionController = {
           },
         },
         {
+          $lookup: {
+            from: "products",
+            localField: "details.product_id",
+            foreignField: "_id",
+            as: "products",
+          },
+        },
+        {
+          $addFields: {
+            details: {
+              $map: {
+                input: "$details",
+                as: "detail",
+                in: {
+                  $mergeObjects: [
+                    {
+                      _id: "$$detail._id",
+                      transaction_id: "$$detail.transaction_id",
+                      quantity: "$$detail.quantity",
+                      subtotal: "$$detail.subtotal",
+                      product: {
+                        $arrayElemAt: [
+                          {
+                            $filter: {
+                              input: "$products",
+                              as: "prod",
+                              cond: {
+                                $eq: ["$$prod._id", "$$detail.product_id"],
+                              },
+                            },
+                          },
+                          0,
+                        ],
+                      },
+                    },
+                  ],
+                },
+              },
+            },
+          },
+        },
+        {
           $addFields: {
             total_items: {
               $sum: "$details.quantity",
             },
           },
+        },
+        {
+          $unset: ["products"],
         },
       ]);
 
@@ -153,7 +214,30 @@ export const transactionController = {
     }
   },
 
-  updateTransaction: async (req, res) => {},
+  deleteTransaction: async (req, res) => {
+    const { id } = req.params;
+    const transaction = await Transaction.findByIdAndDelete(id);
+    if (!transaction) {
+      return res.status(404).json({
+        success: false,
+        message: "Transaksi tidak ditemukan",
+      });
+    }
 
-  deleteTransaction: async (req, res) => {},
+    res.status(200).json({
+      success: true,
+      message: "Transaksi berhasil dihapus",
+    });
+  },
+
+  getUserTransaction: async (req, res) => {
+    const { id } = req.user;
+    const transactions = await Transaction.find({ customer_id: id });
+
+    res.status(200).json({
+      success: true,
+      message: "Berhasil mengambil transaksi",
+      data: transactions,
+    });
+  },
 };

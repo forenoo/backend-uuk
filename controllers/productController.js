@@ -1,21 +1,13 @@
-import Joi from "joi";
-import Product from "../models/product.js"; // Fixed casing to match existing file
+import Product from "../models/product.js";
+import { validationResult } from "express-validator";
 
 export const productController = {
   createProduct: async (req, res) => {
-    const validation = Joi.object({
-      name: Joi.string().required(),
-      price: Joi.number().required(),
-      stock: Joi.number().required(),
-      type: Joi.string().valid("food", "drink", "snack").required(),
-      image_url: Joi.string().required(),
-      category_id: Joi.string().required(),
-    });
-
-    const { error } = validation.validate(req.body);
-    if (error) {
+    const validation = validationResult(req);
+    if (!validation.isEmpty()) {
       return res.status(400).json({
-        message: error.message,
+        message: "Validation error",
+        errors: validation.array(),
       });
     }
 
@@ -46,7 +38,14 @@ export const productController = {
   },
 
   getAllProducts: async (req, res) => {
-    const products = await Product.find().populate("category_id");
+    const { q } = req.query;
+
+    let query = {};
+    if (q) {
+      query = { name: { $regex: q, $options: "i" } };
+    }
+
+    const products = await Product.find(query).populate("category_id");
 
     res.status(200).json({
       message: "Products fetched successfully",

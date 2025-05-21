@@ -1,21 +1,16 @@
-import Joi from "joi";
 import Customer from "../models/customer.js";
 import { generateToken } from "../utils/jwt.js";
 import bcrypt from "bcrypt";
+import User from "../models/user.js";
+import { validationResult } from "express-validator";
 
 export const authController = {
   register: async (req, res) => {
-    const validation = Joi.object({
-      username: Joi.string().required(),
-      password: Joi.string().required(),
-      address: Joi.string().optional(),
-      phone_number: Joi.string().optional(),
-    });
-
-    const { error } = validation.validate(req.body);
-    if (error) {
+    const validation = validationResult(req);
+    if (!validation.isEmpty()) {
       return res.status(400).json({
-        message: error.message,
+        message: "Validation error",
+        errors: validation.array(),
       });
     }
 
@@ -40,7 +35,7 @@ export const authController = {
     }
 
     const newCustomer = await Customer.create(dataCustomer);
-    const token = generateToken(newCustomer);
+    const token = generateToken(newCustomer, "user");
     const hashedPassword = await bcrypt.hash(password, 10);
     newCustomer.password = hashedPassword;
     await newCustomer.save();
@@ -53,6 +48,7 @@ export const authController = {
           username: newCustomer.username,
           address: newCustomer.address,
           phone_number: newCustomer.phone_number,
+          role: "user",
         },
         token,
       },
@@ -60,40 +56,40 @@ export const authController = {
   },
 
   login: async (req, res) => {
-    const validation = Joi.object({
-      username: Joi.string().required(),
-      password: Joi.string().required(),
-    });
-
-    const { error } = validation.validate(req.body);
-    if (error) {
+    const validation = validationResult(req);
+    if (!validation.isEmpty()) {
       return res.status(400).json({
-        message: error.message,
+        message: "Validation error",
+        errors: validation.array(),
       });
     }
 
     const { username, password } = req.body;
-    const existingUser = await Customer.findOne({ username });
-    const isPasswordValid = await bcrypt.compare(
-      password,
-      existingUser.password
-    );
-    if (!existingUser || !isPasswordValid) {
+
+    let user = await Customer.findOne({ username });
+    let role = "user";
+    if (!user) {
+      user = await User.findOne({ username });
+      role = "admin";
+    }
+    const isPasswordValid = await bcrypt.compare(password, user.password);
+    if (!user || !isPasswordValid) {
       return res.status(400).json({
         message: "Username atau password salah",
       });
     }
 
-    const token = generateToken(existingUser);
+    const token = generateToken(user, role);
 
     res.status(200).json({
       message: "Berhasil melakukan login",
       data: {
         user: {
-          id: existingUser._id,
-          username: existingUser.username,
-          address: existingUser.address,
-          phone_number: existingUser.phone_number,
+          id: user._id,
+          username: user.username,
+          address: user.address,
+          phone_number: user.phone_number,
+          role,
         },
         token,
       },
