@@ -1,13 +1,13 @@
 import express from "express";
 import dotenv from "dotenv";
 import morgan from "morgan";
-import { connectDB } from "./config/db.js";
 import cors from "cors";
 import authRoutes from "./routes/authRoutes.js";
 import categoryRoutes from "./routes/categoryRoutes.js";
 import productRoutes from "./routes/productRoutes.js";
 import transactionRoutes from "./routes/transactionRoutes.js";
 import overviewRoutes from "./routes/overviewRoutes.js";
+import { connectDB } from "./config/db.js";
 
 const app = express();
 dotenv.config();

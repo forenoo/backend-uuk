@@ -17,14 +17,14 @@ router.get(
   transactionController.getAllTransaction
 );
 router.get(
-  "/:id",
-  checkAuthMiddleware,
-  transactionController.getTransactionById
-);
-router.get(
   "/user",
   checkAuthMiddleware,
   transactionController.getUserTransaction
+);
+router.get(
+  "/:id",
+  checkAuthMiddleware,
+  transactionController.getTransactionById
 );
 router.delete(
   "/:id",

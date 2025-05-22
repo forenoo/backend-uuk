@@ -231,13 +231,59 @@ export const transactionController = {
   },
 
   getUserTransaction: async (req, res) => {
-    const { id } = req.user;
-    const transactions = await Transaction.find({ customer_id: id });
+    try {
+      const transactions = await Transaction.aggregate([
+        {
+          $match: { customer_id: new mongoose.Types.ObjectId(req.user.id) },
+        },
+        {
+          $lookup: {
+            from: "customers",
+            localField: "customer_id",
+            foreignField: "_id",
+            as: "customer",
+          },
+        },
+        {
+          $unwind: {
+            path: "$customer",
+            preserveNullAndEmptyArrays: true,
+          },
+        },
+        {
+          $unset: ["customer_id"],
+        },
+        {
+          $lookup: {
+            from: "transaction_details",
+            localField: "_id",
+            foreignField: "transaction_id",
+            as: "details",
+          },
+        },
+        {
+          $addFields: {
+            total_items: {
+              $sum: "$details.quantity",
+            },
+          },
+        },
+        {
+          $unset: ["details"],
+        },
+      ]);
 
-    res.status(200).json({
-      success: true,
-      message: "Berhasil mengambil transaksi",
-      data: transactions,
-    });
+      res.status(200).json({
+        success: true,
+        message: "Berhasil mengambil transaksi",
+        data: transactions,
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message: "Gagal mengambil transaksi",
+        error: error.message,
+      });
+    }
   },
 };
