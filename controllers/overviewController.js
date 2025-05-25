@@ -91,4 +91,59 @@ export const overviewController = {
       data: recentProducts,
     });
   },
+
+  getCustomerGrowth: async (req, res) => {
+    try {
+      // Get customer growth data for the last 6 months
+      const customerGrowth = await Customer.aggregate([
+        {
+          $group: {
+            _id: {
+              year: { $year: "$createdAt" },
+              month: { $month: "$createdAt" },
+            },
+            totalCustomers: { $sum: 1 },
+          },
+        },
+        {
+          $sort: {
+            "_id.year": 1,
+            "_id.month": 1,
+          },
+        },
+        {
+          $project: {
+            _id: 0,
+            date: {
+              $concat: [
+                { $toString: "$_id.year" },
+                "-",
+                {
+                  $cond: {
+                    if: { $lt: ["$_id.month", 10] },
+                    then: { $concat: ["0", { $toString: "$_id.month" }] },
+                    else: { $toString: "$_id.month" },
+                  },
+                },
+              ],
+            },
+            totalCustomers: 1,
+          },
+        },
+        {
+          $sort: { date: 1 },
+        },
+      ]);
+
+      res.status(200).json({
+        message: "Berhasil mengambil data pertumbuhan pelanggan",
+        data: customerGrowth,
+      });
+    } catch (error) {
+      res.status(500).json({
+        message: "Gagal mengambil data pertumbuhan pelanggan",
+        error: error.message,
+      });
+    }
+  },
 };

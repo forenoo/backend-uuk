@@ -15,5 +15,10 @@ router.get(
   checkAdminMiddleware,
   overviewController.getRecentProducts
 );
+router.get(
+  "/customer-growth",
+  checkAdminMiddleware,
+  overviewController.getCustomerGrowth
+);
 
 export default router;

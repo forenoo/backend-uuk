@@ -5,9 +5,7 @@
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
-    "dev": "nodemon index.js",
-    "create-users": "node scripts/create-admin.js",
-    "create-dummy-data": "node scripts/create-dummy-data.js"
+    "dev": "nodemon index.js"
   },
   "keywords": [],
   "author": "",

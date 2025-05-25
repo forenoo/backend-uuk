@@ -8,10 +8,8 @@ import TransactionDetail from "../models/transactionDetail.js";
 import { faker } from "@faker-js/faker";
 import bcrypt from "bcrypt";
 
-// Load environment variables
 dotenv.config();
 
-// Connect to database
 mongoose
   .connect(process.env.MONGO_URI)
   .then(() => console.log("Connected to MongoDB"))
@@ -20,7 +18,6 @@ mongoose
     process.exit(1);
   });
 
-// Array to store created data for reference
 const createdData = {
   categories: [],
   products: [],
@@ -29,7 +26,12 @@ const createdData = {
   transactionDetails: [],
 };
 
-// Function to create categories
+const randomDate = (start, end) => {
+  return new Date(
+    start.getTime() + Math.random() * (end.getTime() - start.getTime())
+  );
+};
+
 const createCategories = async () => {
   console.log("Creating categories...");
 
@@ -47,10 +49,8 @@ const createCategories = async () => {
   ];
 
   try {
-    // Clear existing categories
     await Category.deleteMany({});
 
-    // Create new categories
     for (const category of categories) {
       const newCategory = await Category.create({
         icon: category.icon,
@@ -67,7 +67,6 @@ const createCategories = async () => {
   }
 };
 
-// Function to create products
 const createProducts = async () => {
   console.log("Creating products...");
 
@@ -76,13 +75,14 @@ const createProducts = async () => {
     "/uploads/1747806439651-_2cad0f15-a6fc-4b46-8f5c-c66291ed6aa2.jpeg";
 
   try {
-    // Clear existing products
     await Product.deleteMany({});
 
-    // Create 50 products
+    const startDate = new Date(new Date().setMonth(new Date().getMonth() - 6));
+    const endDate = new Date();
+
     for (let i = 0; i < 50; i++) {
-      // Select random category from created categories
       const randomCategory = faker.helpers.arrayElement(createdData.categories);
+      const createdAt = randomDate(startDate, endDate);
 
       const product = await Product.create({
         name: faker.commerce.productName(),
@@ -91,6 +91,8 @@ const createProducts = async () => {
         type: faker.helpers.arrayElement(productTypes),
         image_url: imageUrl,
         category_id: randomCategory._id,
+        createdAt: createdAt,
+        updatedAt: createdAt,
       });
 
       createdData.products.push(product);
@@ -102,23 +104,26 @@ const createProducts = async () => {
   }
 };
 
-// Function to create customers
 const createCustomers = async () => {
   console.log("Creating customers...");
 
   try {
-    // Clear existing customers
     await Customer.deleteMany({});
 
-    // Create 20 customers
-    for (let i = 0; i < 20; i++) {
+    const startDate = new Date(new Date().setMonth(new Date().getMonth() - 12));
+    const endDate = new Date();
+
+    for (let i = 0; i < 50; i++) {
       const hashedPassword = await bcrypt.hash("password123", 10);
+      const createdAt = randomDate(startDate, endDate);
 
       const customer = await Customer.create({
-        username: faker.internet.userName(),
+        username: faker.internet.username(),
         password: hashedPassword,
         address: faker.location.streetAddress(),
         phone_number: faker.phone.number(),
+        createdAt: createdAt,
+        updatedAt: createdAt,
       });
 
       createdData.customers.push(customer);
@@ -130,21 +135,27 @@ const createCustomers = async () => {
   }
 };
 
-// Function to create transactions
 const createTransactions = async () => {
   console.log("Creating transactions...");
 
   try {
-    // Clear existing transactions
     await Transaction.deleteMany({});
 
-    // Create 100 transactions
-    for (let i = 0; i < 100; i++) {
+    const startDate = new Date(new Date().setMonth(new Date().getMonth() - 6));
+    const endDate = new Date();
+
+    for (let i = 0; i < 200; i++) {
       const randomCustomer = faker.helpers.arrayElement(createdData.customers);
+      const createdAt = randomDate(
+        new Date(Math.max(startDate, randomCustomer.createdAt)), // Transaction date must be after customer registration
+        endDate
+      );
 
       const transaction = await Transaction.create({
         customer_id: randomCustomer._id,
-        total_price: 0, // We'll update this after creating transaction details
+        total_price: 0,
+        createdAt: createdAt,
+        updatedAt: createdAt,
       });
 
       createdData.transactions.push(transaction);
@@ -156,17 +167,13 @@ const createTransactions = async () => {
   }
 };
 
-// Function to create transaction details
 const createTransactionDetails = async () => {
   console.log("Creating transaction details...");
 
   try {
-    // Clear existing transaction details
     await TransactionDetail.deleteMany({});
 
-    // Create approximately 200 transaction details
     for (const transaction of createdData.transactions) {
-      // Each transaction will have 1-5 items
       const numberOfItems = faker.number.int({ min: 1, max: 5 });
       let totalPrice = 0;
 
@@ -182,12 +189,13 @@ const createTransactionDetails = async () => {
           product_id: randomProduct._id,
           quantity: quantity,
           subtotal: subtotal,
+          createdAt: transaction.createdAt,
+          updatedAt: transaction.createdAt,
         });
 
         createdData.transactionDetails.push(transactionDetail);
       }
 
-      // Update the transaction with the total price
       await Transaction.findByIdAndUpdate(transaction._id, {
         total_price: totalPrice,
       });
@@ -201,7 +209,6 @@ const createTransactionDetails = async () => {
   }
 };
 
-// Main function to run the seeding process
 const seedDatabase = async () => {
   try {
     await createCategories();
@@ -212,7 +219,6 @@ const seedDatabase = async () => {
 
     console.log("Database seeding completed successfully!");
 
-    // Print summary
     console.log("\nSummary:");
     console.log(`Categories: ${createdData.categories.length}`);
     console.log(`Products: ${createdData.products.length}`);
@@ -222,6 +228,19 @@ const seedDatabase = async () => {
       `Transaction Details: ${createdData.transactionDetails.length}`
     );
 
+    const customerDates = createdData.customers.map((c) => c.createdAt);
+    const transactionDates = createdData.transactions.map((t) => t.createdAt);
+
+    console.log("\nDate Ranges:");
+    console.log("Customers:", {
+      earliest: new Date(Math.min(...customerDates)).toLocaleDateString(),
+      latest: new Date(Math.max(...customerDates)).toLocaleDateString(),
+    });
+    console.log("Transactions:", {
+      earliest: new Date(Math.min(...transactionDates)).toLocaleDateString(),
+      latest: new Date(Math.max(...transactionDates)).toLocaleDateString(),
+    });
+
     process.exit(0);
   } catch (error) {
     console.error("Error seeding database:", error);
@@ -229,5 +248,4 @@ const seedDatabase = async () => {
   }
 };
 
-// Run the seeder
 seedDatabase();
