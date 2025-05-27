@@ -72,8 +72,13 @@ export const authController = {
       user = await User.findOne({ username });
       role = "admin";
     }
+    if (!user) {
+      return res.status(400).json({
+        message: "Username atau password salah",
+      });
+    }
     const isPasswordValid = await bcrypt.compare(password, user.password);
-    if (!user || !isPasswordValid) {
+    if (!isPasswordValid) {
       return res.status(400).json({
         message: "Username atau password salah",
       });

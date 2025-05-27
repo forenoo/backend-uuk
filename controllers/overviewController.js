@@ -94,7 +94,6 @@ export const overviewController = {
 
   getCustomerGrowth: async (req, res) => {
     try {
-      // Get customer growth data for the last 6 months
       const customerGrowth = await Customer.aggregate([
         {
           $group: {

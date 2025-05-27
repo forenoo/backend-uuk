@@ -1,5 +1,6 @@
 import Transaction from "../models/transaction.js";
 import TransactionDetail from "../models/transactionDetail.js";
+import Product from "../models/product.js";
 import mongoose from "mongoose";
 import { validationResult } from "express-validator";
 
@@ -16,6 +17,26 @@ export const transactionController = {
     const { customer_id, total_price, products } = req.body;
 
     try {
+      if (Array.isArray(products) && products.length > 0) {
+        for (const item of products) {
+          const product = await Product.findById(item.product_id);
+
+          if (!product) {
+            return res.status(404).json({
+              success: false,
+              message: `Product with ID ${item.product_id} not found`,
+            });
+          }
+
+          if (product.stock < item.quantity) {
+            return res.status(400).json({
+              success: false,
+              message: `Insufficient stock for product ${product.name}`,
+            });
+          }
+        }
+      }
+
       const transaction = await Transaction.create({
         customer_id,
         total_price,
@@ -30,6 +51,12 @@ export const transactionController = {
         }));
 
         await TransactionDetail.insertMany(transactionDetails);
+
+        for (const item of products) {
+          await Product.findByIdAndUpdate(item.product_id, {
+            $inc: { stock: -item.quantity },
+          });
+        }
       }
 
       res.status(201).json({
@@ -109,6 +136,7 @@ export const transactionController = {
 
   getTransactionById: async (req, res) => {
     const { id } = req.params;
+
     try {
       const [transaction] = await Transaction.aggregate([
         {

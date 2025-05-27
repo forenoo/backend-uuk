@@ -71,8 +71,7 @@ const createProducts = async () => {
   console.log("Creating products...");
 
   const productTypes = ["food", "drink", "snack"];
-  const imageUrl =
-    "/uploads/1747806439651-_2cad0f15-a6fc-4b46-8f5c-c66291ed6aa2.jpeg";
+  const imageUrl = "/uploads/inimakanan.jpg";
 
   try {
     await Product.deleteMany({});
@@ -147,7 +146,7 @@ const createTransactions = async () => {
     for (let i = 0; i < 200; i++) {
       const randomCustomer = faker.helpers.arrayElement(createdData.customers);
       const createdAt = randomDate(
-        new Date(Math.max(startDate, randomCustomer.createdAt)), // Transaction date must be after customer registration
+        new Date(Math.max(startDate, randomCustomer.createdAt)),
         endDate
       );
 
